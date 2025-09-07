@@ -977,7 +977,7 @@
        // All JS code from the previous correct version will be pasted here.
        // For brevity, I'm not showing it again, but it's the full script from `script.js`
        // from the last response. This will ensure everything works in a single file.
-
+        
         // ========== STATE ==========
         let rawData = [];
         let headers = [];
@@ -1858,8 +1858,8 @@
 
         // ========== Smart Order Form ==========
         function openNewOrder(initialData = null, editIndex = null) {
-            isFullFormVisible = !!isEdit; // If editing, show all fields by default
             const isEdit = editIndex !== null;
+            isFullFormVisible = !!isEdit; // If editing, show all fields by default
             const data = initialData || {};
             const standardFields = headers.filter(h => !NEW_HEADERS.includes(h) && h !== 'שעת אספקה');
             const agentHeader = headers.find(h => h === 'שם סוכן');
@@ -2146,7 +2146,7 @@
                         <label style="display:flex; align-items:center; gap: 8px; margin-top: 10px;">
                             <input type="checkbox" id="newNoteUrgent"> <strong>הערה דחופה</strong>
                         </label>`;
-            
+    
             const footer = `<button class="btn secondary" onclick="closeModal()">ביטול</button>
                             <button class="btn" onclick="saveOrderNote(${orderIdx})">שמור הערה</button>`;
 

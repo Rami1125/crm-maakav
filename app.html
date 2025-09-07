@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ניהול מכולה - ח. סבן</title>
+    
+    <!-- PWA Manifest and Themeing -->
+    <meta name="theme-color" content="#0b72b9">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/0b72b9/FFFFFF?text=סבן">
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+    
+    <style>
+        :root {
+            --brand: #0b72b9;
+            --accent: #ff9f1c;
+            --success: #28a745;
+            --danger: #dc3545;
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text: #333;
+            --muted: #6b7280;
+            --radius: 12px;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        body {
+            font-family: 'Assistant', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 0;
+            color: var(--text);
+            overscroll-behavior-y: contain;
+        }
+        .app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .app-header {
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        .app-header h1 {
+            margin: 0;
+            font-size: 1.5em;
+            color: var(--brand);
+        }
+        .app-header h1 .logo {
+             font-size: 1.5em;
+             margin-right: 10px;
+        }
+        .app-header p {
+            margin: 5px 0 0;
+            color: var(--muted);
+        }
+
+        .card {
+            background-color: var(--card);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .status-card h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 700;
+            color: white;
+        }
+        .status-badge.open { background-color: var(--success); }
+        .status-badge.closed { background-color: var(--muted); }
+        .status-badge.alert { background-color: var(--danger); }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .info-item {
+            text-align: center;
+        }
+        .info-item .label {
+            font-size: 0.9em;
+            color: var(--muted);
+            margin-bottom: 5px;
+        }
+        .info-item .value {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: var(--brand);
+        }
+
+        .actions-card h2 {
+            margin-top: 0;
+        }
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .action-btn {
+            background-color: var(--brand);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: var(--radius);
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(11, 114, 185, 0.3);
+        }
+        .action-btn.secondary {
+            background-color: var(--accent);
+        }
+        .action-btn.disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .history-card .order-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-card .order-item:last-child {
+            border-bottom: none;
+        }
+        .order-item .details {
+            font-size: 1em;
+        }
+        .order-item .date {
+            font-size: 0.8em;
+            color: var(--muted);
+        }
+
+        #loader {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+        }
+        
+        .notification-prompt {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            background-color: #333;
+            color: white;
+            padding: 15px;
+            border-radius: var(--radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            max-width: 570px;
+            margin: 0 auto;
+        }
+        .notification-prompt p {
+            margin: 0;
+            padding-right: 15px;
+        }
+        .notification-prompt button {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        .notification-prompt .confirm-btn {
+            background-color: var(--accent);
+            color: white;
+        }
+        .notification-prompt .cancel-btn {
+            background-color: #555;
+            color: white;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="app-header">
+            <h1><span class="logo">📦</span> ח. סבן חומרי בנין</h1>
+            <p id="client-name">טוען נתונים...</p>
+        </header>
+
+        <main id="app-content" style="display: none;">
+            
+            <!-- Current Order Status -->
+            <div class="card status-card">
+                <h2>
+                    הזמנה פעילה
+                    <span id="status-badge" class="status-badge"></span>
+                </h2>
+                <p><strong>כתובת:</strong> <span id="order-address"></span></p>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="label">מס' הזמנה</div>
+                        <div class="value" id="order-id"></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">ימים בשטח</div>
+                        <div class="value" id="days-on-site"></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">סיום צפוי</div>
+                        <div class="value" id="end-date"></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">סוג פעולה אחרונה</div>
+                        <div class="value" id="last-action"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Driver Tracking Card (hidden by default) -->
+            <div class="card" id="driver-card" style="display:none;">
+                <h2><span style="font-size:1.5em; vertical-align: middle;">🚚</span> הנהג בדרך אליך!</h2>
+                <p id="driver-message">מוחמד יצא לדרך ויגיע בקרוב.</p>
+                <div class="action-buttons" style="grid-template-columns: 1fr;">
+                     <a id="driver-location-link" href="#" target="_blank" class="action-btn">צפייה במיקום הנהג</a>
+                </div>
+            </div>
+
+            <!-- Main Actions -->
+            <div class="card actions-card">
+                <h2>פעולות מהירות</h2>
+                <div class="action-buttons">
+                    <button id="request-swap-btn" class="action-btn">בקש החלפה</button>
+                    <button id="request-removal-btn" class="action-btn secondary">בקש פינוי</button>
+                </div>
+            </div>
+
+            <!-- Order History -->
+            <div class="card history-card">
+                <h2>היסטוריית הזמנות</h2>
+                <div id="history-list">
+                    <!-- History items will be injected here -->
+                </div>
+            </div>
+            
+        </main>
+
+        <div id="loader">
+            <p>טוען את נתוני המכולה שלך...</p>
+        </div>
+    </div>
+    
+    <div id="notification-prompt" class="notification-prompt">
+        <p>רוצה לקבל עדכונים חיים על המכולה שלך?</p>
+        <div>
+            <button id="confirm-notifications" class="confirm-btn">כן, בטח!</button>
+            <button id="cancel-notifications" class="cancel-btn">לא תודה</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- CONFIGURATION ---
+        // This URL will be your Google Apps Script Web App URL
+        const API_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'; 
+
+        // Firebase Configuration - REPLACE WITH YOURS
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // --- DOM ELEMENTS ---
+        const loader = document.getElementById('loader');
+        const appContent = document.getElementById('app-content');
+        const clientNameEl = document.getElementById('client-name');
+        // ... more elements
+        const requestSwapBtn = document.getElementById('request-swap-btn');
+        const requestRemovalBtn = document.getElementById('request-removal-btn');
+        const notificationPrompt = document.getElementById('notification-prompt');
+
+        // --- APPLICATION LOGIC ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const clientId = params.get('id');
+
+            if (!clientId) {
+                loader.textContent = 'שגיאה: לא זוהה מספר לקוח.';
+                return;
+            }
+
+            // Initialize Firebase
+            try {
+                firebase.initializeApp(firebaseConfig);
+                const messaging = firebase.messaging();
+                setupNotifications(messaging, clientId);
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+            }
+
+            await loadClientData(clientId);
+        });
+
+        async function loadClientData(clientId) {
+            try {
+                // In a real app, you would fetch from your API
+                // const response = await fetch(`${API_URL}?id=${clientId}`);
+                // const data = await response.json();
+                
+                // For demonstration, we'll use mock data
+                const mockData = getMockData(clientId);
+
+                updateUI(mockData);
+
+                loader.style.display = 'none';
+                appContent.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading client data:', error);
+                loader.textContent = 'אופס, משהו השתבש בטעינת הנתונים.';
+            }
+        }
+        
+        function updateUI(data) {
+            const { clientInfo, activeOrder, orderHistory } = data;
+
+            clientNameEl.textContent = `שלום, ${clientInfo.name}`;
+            
+            // Active Order
+            if(activeOrder) {
+                document.getElementById('status-badge').textContent = activeOrder.status;
+                document.getElementById('status-badge').className = `status-badge ${activeOrder.status === 'פתוח' ? 'open' : 'closed'}`;
+                document.getElementById('order-address').textContent = activeOrder.address;
+                document.getElementById('order-id').textContent = activeOrder.orderId;
+                document.getElementById('days-on-site').textContent = activeOrder.daysOnSite;
+                document.getElementById('end-date').textContent = activeOrder.endDate;
+                document.getElementById('last-action').textContent = activeOrder.lastAction;
+            }
+
+            // History
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = '';
+            orderHistory.forEach(order => {
+                const item = document.createElement('div');
+                item.className = 'order-item';
+                item.innerHTML = `
+                    <div class="details">
+                        <strong>${order.action}</strong> בכתובת: ${order.address}
+                        <div class="date">תעודה: ${order.orderId} | תאריך: ${order.date}</div>
+                    </div>
+                    <span class="status-badge ${order.status === 'פתוח' ? 'open' : 'closed'}">${order.status}</span>
+                `;
+                historyList.appendChild(item);
+            });
+            
+             // Mock Driver status
+            if (activeOrder && activeOrder.orderId === '6714498') {
+                const driverCard = document.getElementById('driver-card');
+                driverCard.style.display = 'block';
+                document.getElementById('driver-location-link').href = 'https://waze.com/ul?ll=32.0853,34.7818&navigate=yes';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        requestSwapBtn.addEventListener('click', () => handleAction('swap'));
+        requestRemovalBtn.addEventListener('click', () => handleAction('removal'));
+        
+        async function handleAction(actionType) {
+            const actionText = actionType === 'swap' ? 'החלפה' : 'פינוי';
+            if (!confirm(`האם אתה בטוח שברצונך לבקש ${actionText}?`)) return;
+
+            alert(`בקשת ${actionText} נשלחה למערכת. ניצור איתך קשר בהקדם לאישור.`);
+            // In a real app:
+            // const response = await fetch(API_URL, { 
+            //    method: 'POST', 
+            //    body: JSON.stringify({ clientId: getClientId(), action: actionType }) 
+            // });
+            // Handle response...
+        }
+
+        // --- NOTIFICATIONS LOGIC ---
+        function setupNotifications(messaging, clientId) {
+            const confirmBtn = document.getElementById('confirm-notifications');
+            const cancelBtn = document.getElementById('cancel-notifications');
+
+            // Check if permission is already granted or denied
+            if (Notification.permission === 'granted') {
+                console.log('Notification permission already granted.');
+                retrieveToken(messaging, clientId);
+                return;
+            }
+            if (Notification.permission === 'denied') {
+                console.log('Notification permission was denied.');
+                return;
+            }
+
+            // If default, show the prompt
+            setTimeout(() => {
+                notificationPrompt.style.display = 'flex';
+            }, 3000);
+
+            confirmBtn.addEventListener('click', async () => {
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        console.log('Notification permission granted.');
+                        await retrieveToken(messaging, clientId);
+                    } else {
+                        console.log('Unable to get permission to notify.');
+                    }
+                } catch(error) {
+                    console.error('Error requesting notification permission', error);
+                } finally {
+                    notificationPrompt.style.display = 'none';
+                }
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                notificationPrompt.style.display = 'none';
+            });
+        }
+
+        async function retrieveToken(messaging, clientId) {
+             try {
+                const currentToken = await messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE' });
+                if (currentToken) {
+                    console.log('FCM Token:', currentToken);
+                    // Send this token to your server (Google Apps Script)
+                    sendTokenToServer(clientId, currentToken);
+                } else {
+                    console.log('No registration token available. Request permission to generate one.');
+                }
+            } catch (err) {
+                console.log('An error occurred while retrieving token. ', err);
+            }
+        }
+        
+        function sendTokenToServer(clientId, token) {
+            console.log(`Sending token to server for client ${clientId}`);
+            // In a real app, this would be a fetch POST request to your API
+            // fetch(API_URL, { 
+            //    method: 'POST', 
+            //    body: JSON.stringify({ clientId, token }) 
+            // });
+        }
+
+
+        // --- MOCK DATA FUNCTION ---
+        // Replace this with actual API calls
+        function getMockData(clientId) {
+            return {
+                clientInfo: {
+                    id: clientId,
+                    name: 'שני אילתי/כללי'
+                },
+                activeOrder: {
+                    orderId: '6714498',
+                    address: 'חסידה 14 מודיעין',
+                    status: 'פתוח',
+                    daysOnSite: '2',
+                    endDate: '15/09/2025',
+                    lastAction: 'הורדה',
+                },
+                orderHistory: [
+                     { orderId: '6714397', address: 'חסידה 14 מודיעין', action: 'הורדה', date: '01/09/2025', status: 'סגור'},
+                     { orderId: '6712001', address: 'הנביאים 10 תל אביב', action: 'החלפה', date: '15/08/2025', status: 'סגור'},
+                     { orderId: '6711543', address: 'הנביאים 10 תל אביב', action: 'הורדה', date: '01/08/2025', status: 'סגור'}
+                ]
+            };
+        }
+
+    </script>
+</body>
+</html>

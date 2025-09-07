@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מרכז שליטה ובקרה - מעקב מכולות</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="brand">
+            <div class="logo">ח.סבן</div>
+            <div>
+                <div class="app-title">לוח בקרה - מעקב מכולות</div>
+                <div class="app-subtitle">חיבור לגליון: מעקב</div>
+            </div>
+        </div>
+        <div class="controls">
+            <input id="globalSearch" class="search" placeholder="חפש הזמנה..." />
+            <button class="btn" id="reportsBtn">דוחות</button>
+            <button class="btn" id="overdueBtn">ניהול חריגות</button>
+            <button class="btn" id="refreshBtn">רענן</button>
+            <button class="btn secondary" id="newOrderBtn">הזמנה חדשה</button>
+            <button class="btn secondary" id="installButton" style="display:none;">התקן אפליקציה</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="left">
+            <div class="section-card">
+                <div class="section-title">מדדי ביצוע (KPIs)</div>
+                <div class="kpi">
+                    <div class="kpi-card" id="kpi-total"><div class="kpi-label">סה״כ הזמנות</div><div id="kTotal" class="kpi-number">—</div></div>
+                    <div class="kpi-card" id="kpi-open"><div class="kpi-label">הזמנות פתוחות</div><div id="kOpen" class="kpi-number">—</div></div>
+                    <div class="kpi-card" id="kpi-overdue"><div class="kpi-label">הזמנות חורגות</div><div id="kOver" class="kpi-number">—</div></div>
+                    <div class="kpi-card" id="kpi-active"><div class="kpi-label">לקוחות פעילים</div><div id="kActiveCustomers" class="kpi-number">—</div></div>
+                    <div class="kpi-card full-width"><div class="kpi-label">מכולות בשימוש</div><div id="kContainers" class="kpi-number">—</div></div>
+                </div>
+            </div>
+             <div class="insights-section">
+                <div id="locationInsight" class="insight-card"></div>
+                <div id="pendingInsight" class="insight-card"></div>
+                <div id="recentInsight" class="insight-card"></div>
+            </div>
+        </div>
+
+        <div class="main section-card">
+            <div class="toolbar">
+                <div class="section-title no-margin">טבלת הזמנות</div>
+                <div style="flex:1"></div>
+                <div class="filter-controls">
+                    <label>
+                        <input type="checkbox" id="showClosedCheckbox">
+                        הצג הזמנות סגורות
+                    </label>
+                </div>
+                <div id="statusMsg" class="app-subtitle"></div>
+            </div>
+
+            <div id="alertsContainer" style="margin-bottom: 12px;"></div>
+            
+            <div class="table-container">
+                <table class="table" id="ordersTable">
+                    <thead id="tHead"></thead>
+                    <tbody id="tBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="right section-card">
+             <div class="section-title no-margin">הערות ועדכונים</div>
+            <div style="margin-top:8px; display:flex; gap:8px; margin-bottom: 12px;">
+                <button class="btn" id="addNoteBtn">הוסף הערה כללית</button>
+                <button class="btn secondary" id="loadNotesBtn">טען הערות</button>
+            </div>
+            <table class="notes-table">
+                <thead><tr><th>תאריך</th><th>לקוח</th><th>הערה</th></tr></thead>
+                <tbody id="notesTableBody"></tbody>
+            </table>
+
+            <div style="margin-top: 16px;">
+                <div class="section-title no-margin">הגדרות התראות</div>
+                 <div style="display:flex;flex-wrap:wrap;gap:10px; padding-top: 10px;">
+                    <label style="display:flex;align-items:center;gap:4px;">
+                        <input type="checkbox" id="alertOverdue" checked> הזמנה חורגת
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;">
+                        <input type="checkbox" id="alertNewOrder" checked> הזמנה חדשה נוצרת
+                    </label>
+                </div>
+                <button class="btn" style="margin-top:10px;" id="saveAlertsBtn">שמור הגדרות</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+    <div class="install-prompt" id="installPrompt">
+        <div class="install-prompt-content">
+            <strong>התקן את אפליקציית מעקב המכולות</strong>
+            <div class="app-subtitle">גישה מהירה ישירות מהמסך הראשי שלך</div>
+        </div>
+        <div class="install-prompt-actions">
+            <button class="btn secondary" id="dismissInstallBtn">לא עכשיו</button>
+            <button class="btn" id="installPwaBtn">התקן</button>
+        </div>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div id="appModal" class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div id="modalTitle" class="modal-title"></div>
+                <button class="modal-close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="modalForm" onsubmit="return false;">
+                <div id="modalBody" class="modal-body"></div>
+                <div id="modalFooter" class="modal-footer"></div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js" defer></script>
+</body>
+</html>
+

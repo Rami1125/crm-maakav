@@ -253,13 +253,12 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // ⭐️⭐️⭐️ API URL UPDATED ⭐️⭐️⭐️
             const API_URL = "https://script.google.com/macros/s/AKfycbyrDSBVvlOe0jR0EKWZOp8kE1D3l5LKHxZqqMBEypuwN-Ma9mV-mx8y-aR-yUQg0kZqaQ/exec";
             
             const CHAT_TEMPLATES = ["המכולה מלאה, אשמח לתאם פינוי.", "צריך להחליף את המכולה במכולה ריקה.", "האם ניתן לקבל מכולה נוספת?", "מה צפי ההגעה של הנהג?", "תודה רבה על השירות המהיר!", "יש לי שאלה בנוגע לחיוב.", "האם ניתן להאריך את זמן השהייה של המכולה?", "עדכון כתובת - הפינוי יתבצע מכתובת אחרת.", "בקשה דחופה למכולה, אנא צרו קשר.", "הכל בסדר, רק רציתי לוודא שההזמנה התקבלה."];
             let clientState = { id: null, name: null, orders: [], addresses: new Set(), historyChart: null };
             let refreshInterval;
-            
-            // DOM Elements
             const appContainer = document.getElementById('app-container');
             const pages = document.querySelectorAll('.page');
             const clientNameHeader = document.getElementById('client-name-header');
@@ -297,7 +296,6 @@
                 if (refreshInterval) clearInterval(refreshInterval);
                 refreshInterval = setInterval(() => loadClientData(clientState.id, true), 60000);
                 
-                // Activate debug mode if URL parameter is present
                 const urlParams = new URLSearchParams(window.location.search);
                 if(urlParams.get('debug') === 'true') {
                     debugPanel.style.display = 'block';
@@ -308,7 +306,7 @@
                 if (!clientId) return;
                 if (!isRefresh) appContainer.style.opacity = '0.5';
                 try {
-                    const data = await apiGet(`getClientData?identifier=${clientId}`);
+                    const data = await apiPost({ action: 'getClientData', identifier: clientId });
                     if (data.status === 'error' || !data.clientName) throw new Error(data.message || "Client not found");
                     clientState = { id: data.clientId, name: data.clientName, orders: data.orders || [], addresses: new Set(data.orders.map(o => o['כתובת']).filter(Boolean)), historyChart: clientState.historyChart };
                     localStorage.setItem('saban_client_id', data.clientId);
@@ -327,9 +325,17 @@
                     if (!isRefresh) appContainer.style.opacity = '1';
                 }
             }
-
-            async function apiGet(queryString) { const response = await fetch(`${API_URL}?${queryString}`); if (!response.ok) throw new Error(`שגיאת רשת (סטטוס ${response.status})`); return await response.json(); }
-            async function apiPost(body) { const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(`שגיאת רשת (סטטוס ${response.status})`); return await response.json(); }
+            
+            async function apiPost(body) { 
+                const response = await fetch(API_URL, { 
+                    method: 'POST', 
+                    mode: 'cors', // Important for cross-domain requests
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                    body: JSON.stringify(body) 
+                }); 
+                if (!response.ok) throw new Error(`שגיאת רשת (סטטוס ${response.status})`); 
+                return await response.json(); 
+            }
 
             function promptForClientId() {
                 const identifier = prompt("שלום! אנא הזן מספר לקוח או מספר טלפון כדי להתחבר:");
@@ -437,14 +443,13 @@
                 chatForm.addEventListener('submit', handleChatSubmit);
                 getLocationBtn.addEventListener('click', handleGetLocation);
                 
-                // Debug panel listener
                 document.getElementById('debug-run-test').addEventListener('click', () => {
                     const clientId = localStorage.getItem('saban_client_id') || 'not set';
                     document.getElementById('debug-client-id').textContent = clientId;
                     document.getElementById('debug-api-url').textContent = API_URL;
                     const responseBox = document.getElementById('debug-response');
                     responseBox.textContent = 'בודק...';
-                    apiGet(`getClientData?identifier=${clientId}`)
+                    apiPost({ action: 'getClientData', identifier: clientId })
                         .then(data => {
                             responseBox.textContent = JSON.stringify(data, null, 2);
                         })

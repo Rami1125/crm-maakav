@@ -345,9 +345,475 @@
             <span>צ'אט</span>
         </a>
     </nav>
+<script>
+/* ================== CONFIG ================== */
+// החלף בכתובת ה-Web App שלך (Deploy as web app - GET/POST)
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyyZHLsF9KDuRynsuNjweUHqVnNDZ9ZFIiDqRTT23aQSyJ98bCK4I6J1-EBMdNKrDvu/exec';
 
-    <script>
-        // All JavaScript code is now inside this tag
-    </script>
+// אם תרצה להפעיל במצב פיתוח/אוף־ליין, שנה ל־true לקבלת דמות מדומה
+const USE_MOCK = false;
+
+/* ================== INIT ================== */
+document.addEventListener('DOMContentLoaded', init);
+
+let historyChartInstance = null;
+let client = { id: 'C123', name: 'לקוח לדוגמה' }; // ייעוד זמני
+
+function init() {
+    bindNav();
+    bindForms();
+    loadClientFromStorage();
+    setClientName();
+    populateChatTemplates();
+    if (USE_MOCK) {
+        renderActiveOrders(mockActiveOrders());
+        renderHistory(mockHistory());
+    } else {
+        loadClientData();
+        loadActiveOrders();
+        loadHistory();
+        populateAddresses();
+    }
+    initChart();
+}
+
+/* ================== NAVIGATION ================== */
+function bindNav() {
+    document.querySelectorAll('.nav-btn').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+            e.preventDefault();
+            const page = btn.dataset.page;
+            navigateTo(page);
+            document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+}
+
+function navigateTo(pageId) {
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const page = document.getElementById(pageId);
+    if (page) page.classList.add('active');
+    // refresh page-specific content
+    if (pageId === 'page-history') {
+        // refresh chart with latest data (if needed)
+        loadHistory();
+    }
+}
+
+/* ================== CLIENT DATA ================== */
+function loadClientFromStorage() {
+    const stored = localStorage.getItem('crm_client');
+    if (stored) {
+        try { client = JSON.parse(stored); } catch(e){}
+    }
+}
+
+function setClientName() {
+    const el = document.getElementById('client-name-home');
+    if (el) el.textContent = client.name || 'שלום';
+}
+
+/* ================== FETCH HELPERS ================== */
+async function apiGet(params = {}) {
+    // params -> object converted to query string
+    const qs = new URLSearchParams(params).toString();
+    const url = WEB_APP_URL + (qs ? ('?'+qs) : '');
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Network response not ok');
+        const json = await res.json();
+        return json;
+    } catch (err) {
+        console.warn('API GET failed', err);
+        return { success: false, error: err.message };
+    }
+}
+
+async function apiPost(body = {}) {
+    try {
+        const res = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('Network response not ok');
+        const json = await res.json();
+        return json;
+    } catch (err) {
+        console.warn('API POST failed', err);
+        return { success: false, error: err.message };
+    }
+}
+
+/* ================== LOAD / RENDER ORDERS ================== */
+async function loadClientData() {
+    // מושך פרטי לקוח בסיסיים (שם, מזהה)
+    if (USE_MOCK) return;
+    const resp = await apiGet({ action: 'getClient', clientId: client.id });
+    if (resp && resp.success && resp.data) {
+        client = { ...client, ...resp.data };
+        localStorage.setItem('crm_client', JSON.stringify(client));
+        setClientName();
+    }
+}
+
+async function loadActiveOrders() {
+    if (USE_MOCK) {
+        renderActiveOrders(mockActiveOrders());
+        return;
+    }
+    const resp = await apiGet({ action: 'getActiveOrders', clientId: client.id });
+    if (resp && resp.success) {
+        renderActiveOrders(resp.data || []);
+    } else {
+        // במקרה של תקלה - הצג הודעה ונסה להציג mock
+        renderActiveOrders([]);
+        showToast('שגיאה בשליפת הזמנות. בדוק חיבור לשרת.');
+    }
+}
+
+function renderActiveOrders(orders) {
+    const container = document.getElementById('active-orders-container');
+    container.innerHTML = '';
+    if (!orders || orders.length === 0) {
+        document.getElementById('no-active-orders').style.display = 'block';
+        return;
+    }
+    document.getElementById('no-active-orders').style.display = 'none';
+
+    orders.forEach(order => {
+        const card = document.createElement('div');
+        card.className = 'card status-card';
+        const etaClass = order.status === 'זמין' ? 'status-color-זמין' : (order.status === 'במשלוח' ? 'status-color-במשלוח' : 'status-color-חורג');
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+                <div style="text-align:right; min-width:180px">
+                    <div style="font-weight:700">${order.orderId || order.id}</div>
+                    <div style="color:var(--text-muted); margin-top:6px">${order.address || 'כתובת לא ידועה'}</div>
+                </div>
+                <div style="text-align:center; flex:1">
+                    <div class="label">מצב ההזמנה</div>
+                    <div class="value status-indicator ${etaClass}">
+                        <span>${order.status || 'לא ידוע'}</span>
+                        ${order.eta ? `<span class="eta-blinking" style="margin-left:8px">ETA ${order.eta}</span>` : ''}
+                    </div>
+                </div>
+                <div style="min-width:160px; text-align:left">
+                    <button class="btn" style="width:100%;" onclick="requestAction('${order.orderId || order.id}', 'פינוי')">בקש פינוי</button>
+                    <button class="btn" style="width:100%; margin-top:8px; background:#555" onclick="requestAction('${order.orderId || order.id}', 'החלפה')">בקש החלפה</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+/* ================== NEW ORDER FORM ================== */
+function bindForms() {
+    const form = document.getElementById('new-order-form');
+    form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        await handleNewOrderSubmit();
+    });
+
+    const chatForm = document.getElementById('chat-form');
+    chatForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        await handleChatSubmit();
+    });
+}
+
+async function handleNewOrderSubmit() {
+    const type = document.getElementById('order-type').value;
+    const addressSelect = document.getElementById('address-select');
+    const selectedAddress = addressSelect.value;
+    const newAddress = document.getElementById('new-address').value.trim();
+    const notes = document.getElementById('order-notes').value.trim();
+
+    const address = newAddress || selectedAddress;
+    if (!address) {
+        showToast('יש לבחור או להזין כתובת');
+        return;
+    }
+
+    const payload = {
+        action: 'createRequest',
+        clientId: client.id,
+        clientName: client.name,
+        type: type,
+        address: address,
+        notes: notes
+    };
+
+    if (USE_MOCK) {
+        showToast('הבקשה נשלחה (mock)');
+        // רענון תצוגה מקומי
+        loadActiveOrders();
+        return;
+    }
+
+    const resp = await apiPost(payload);
+    if (resp && resp.success) {
+        showToast('הבקשה נשלחה בהצלחה');
+        // רענון הזמנות/יומן
+        loadActiveOrders();
+        loadHistory();
+    } else {
+        showToast('שגיאה בשליחת הבקשה: ' + (resp.error || 'לא ידוע'));
+    }
+}
+
+/* ================== REQUEST ACTION (פינוי/החלפה) ================== */
+async function requestAction(orderId, actionType) {
+    const confirmed = confirm(`לשלוח בקשת ${actionType} להזמנה ${orderId}?`);
+    if (!confirmed) return;
+
+    const payload = {
+        action: 'createRequest',
+        clientId: client.id,
+        clientName: client.name,
+        type: actionType,
+        orderId: orderId,
+        notes: `${actionType} מבוצעת דרך הפורטל`
+    };
+
+    if (USE_MOCK) {
+        showToast(`בקשת ${actionType} נשלחה (mock)`);
+        loadActiveOrders();
+        return;
+    }
+
+    const resp = await apiPost(payload);
+    if (resp && resp.success) {
+        showToast('הבקשה נשלחה למערכת');
+        loadActiveOrders();
+        loadHistory();
+    } else {
+        showToast('השגיאה בשליחת הבקשה: ' + (resp.error || 'לא ידוע'));
+    }
+}
+
+/* ================== HISTORY (טבלה + גרף) ================== */
+async function loadHistory() {
+    if (USE_MOCK) {
+        renderHistory(mockHistory());
+        return;
+    }
+    const resp = await apiGet({ action: 'getHistory', clientId: client.id });
+    if (resp && resp.success) {
+        renderHistory(resp.data || []);
+    } else {
+        showToast('שגיאה בשליפת היסטוריה');
+        renderHistory([]);
+    }
+}
+
+function renderHistory(records = []) {
+    // טבלה
+    const tbody = document.getElementById('history-table-body');
+    tbody.innerHTML = '';
+    records.forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.orderId || '-'}</td><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.address || '-'}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    // גרף — נבנה לפי ספירה לפי יום
+    const grouped = records.reduce((acc, cur)=>{
+        const day = (new Date(cur.date)).toISOString().slice(0,10);
+        acc[day] = (acc[day] || 0) + 1;
+        return acc;
+    }, {});
+    const labels = Object.keys(grouped).sort();
+    const data = labels.map(l=>grouped[l]);
+
+    updateChart(labels, data);
+}
+
+/* ================== CHART.JS ================== */
+function initChart() {
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    historyChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{ label: 'בקשות לפי יום', data: [] }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { autoSkip: true } },
+                y: { beginAtZero: true }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function updateChart(labels, data) {
+    if (!historyChartInstance) return;
+    historyChartInstance.data.labels = labels;
+    historyChartInstance.data.datasets[0].data = data;
+    historyChartInstance.update();
+}
+
+/* ================== CHAT / TEMPLATES ================== */
+function populateChatTemplates() {
+    const templates = [
+        'שלום, בקשת הפינוי התקבלה ותטופל תוך 24 שעות.',
+        'היי, בקשת ההחלפה נקלטה – נעדכן כשיתואם יום ומשא.',
+        'אנא וודא שהמכולה נגישה לנהג בזמן הגעה.',
+        'נבקש ממך לאשר פרטי כתובת/טלפון לתיאום.'
+    ];
+    const container = document.getElementById('chat-templates');
+    container.innerHTML = '';
+    templates.forEach(t=>{
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'template-btn';
+        btn.textContent = t;
+        btn.addEventListener('click', ()=> {
+            document.getElementById('chat-message').value = t;
+            navigateTo('page-chat');
+        });
+        container.appendChild(btn);
+    });
+}
+
+async function handleChatSubmit() {
+    const message = document.getElementById('chat-message').value.trim();
+    if (!message) { showToast('נדרשת הודעה'); return; }
+
+    const payload = {
+        action: 'sendMessage',
+        clientId: client.id,
+        clientName: client.name,
+        message: message
+    };
+
+    if (USE_MOCK) {
+        showToast('הודעה נשלחה (mock)');
+        document.getElementById('chat-message').value = '';
+        return;
+    }
+
+    const resp = await apiPost(payload);
+    if (resp && resp.success) {
+        showToast('הודעה נשלחה למחלקת ההזמנות');
+        document.getElementById('chat-message').value = '';
+    } else {
+        showToast('שגיאה בשליחת ההודעה');
+    }
+}
+
+/* ================== ADDRESSES (לבחירה) ================== */
+async function populateAddresses() {
+    if (USE_MOCK) {
+        const select = document.getElementById('address-select');
+        select.innerHTML = `<option value="">בחר כתובת</option>`;
+        ['רחוב האלונים 10, פתח תקווה', 'תל אביב, בן יהודה 3'].forEach(a=>{
+            const opt = document.createElement('option');
+            opt.value = a; opt.textContent = a;
+            select.appendChild(opt);
+        });
+        return;
+    }
+
+    const resp = await apiGet({ action: 'getClientAddresses', clientId: client.id });
+    const select = document.getElementById('address-select');
+    select.innerHTML = `<option value="">בחר כתובת</option>`;
+    if (resp && resp.success && Array.isArray(resp.data)) {
+        resp.data.forEach(a=>{
+            const opt = document.createElement('option');
+            opt.value = a; opt.textContent = a;
+            select.appendChild(opt);
+        });
+    } else {
+        // לא הצלחנו למשוך - השאר ריק
+    }
+}
+
+/* ================== UTILS ================== */
+function formatDate(d) {
+    if (!d) return '-';
+    const date = new Date(d);
+    if (isNaN(date)) return d;
+    return date.toLocaleString('he-IL', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function showToast(text, timeout = 3000) {
+    // פשטני — יצירת הודעה זמנית בתחתית המסך
+    let toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.bottom = '100px';
+    toast.style.background = 'rgba(0,0,0,0.8)';
+    toast.style.color = '#fff';
+    toast.style.padding = '10px 14px';
+    toast.style.borderRadius = '8px';
+    toast.style.zIndex = 9999;
+    toast.style.fontWeight = 700;
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    setTimeout(()=> {
+        toast.style.transition = 'opacity 0.4s';
+        toast.style.opacity = '0';
+        setTimeout(()=> toast.remove(), 420);
+    }, timeout);
+}
+
+/* ================== PUSH / SERVICE WORKER (סטאבים) ================== */
+// כאן ניתן להוסיף רישום Service Worker ושליחת token ל־backend.
+// שים לב: יש להוסיף service worker בקובץ נפרד ולהשתמש ב־HTTPS
+async function registerForPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.warn('Push not supported in this browser');
+        return;
+    }
+    try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array('REPLACE_VAPID_PUBLIC_KEY')
+        });
+        // שלח את ה־subscription לשרת לשמירה
+        await apiPost({ action: 'savePushSubscription', clientId: client.id, subscription: sub });
+    } catch (err) {
+        console.warn('Push registration failed', err);
+    }
+}
+
+function urlBase64ToUint8Array(base64String) {
+    // helper for vapid key
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+/* ================== MOCK DATA (למקרה בדיקות) ================== */
+function mockActiveOrders() {
+    return [
+        { orderId: 'O-1001', status: 'במשלוח', eta: 'כמעט שם', address: 'תל אביב, הירקון 12' },
+        { orderId: 'O-1002', status: 'זמין', eta: null, address: 'ראשון לציון, הרצל 3' }
+    ];
+}
+
+function mockHistory() {
+    const now = Date.now();
+    return [
+        { orderId: 'O-1000', date: now - 86400000*3, type: 'הורדה', address: 'רחוב A 1' },
+        { orderId: 'O-0999', date: now - 86400000*2, type: 'החלפה', address: 'רחוב B 2' },
+        { orderId: 'O-0998', date: now - 86400000*1, type: 'פינוי', address: 'רחוב C 3' },
+    ];
+}
+</script>
 </body>
 </html>

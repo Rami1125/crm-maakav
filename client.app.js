@@ -3,7 +3,7 @@
  * @description Client-side logic for the Customer Portal.
  */
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyyZHLsF9KDuRynsuNjweUHqVnNDZ9ZFIiDqRTT23aQSyJ98bCK4I6J1-EBMdNKrDvu/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyd3jl_Rj3qza7W4OMYwyIr3L4m2JhOPxzsg8xaAbWbPY-xB-cq4Z_TVp9tnE0Ltlcy/exec';
 
 // --- Helpers ---
 function getClientIdFromUrl() {

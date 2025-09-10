@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyd3jl_Rj3qza7W4OMYwyIr3L4m2JhOPxzsg8xaAbWbPY-xB-cq4Z_TVp9tnE0Ltlcy/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwfRTTD1IyvbJPNuIzsip4kN-QX--hkRbGv7cHgZckODkZfOzPXaJQegwDMXvSethv0/exec";
 
 const urlParams = new URLSearchParams(window.location.search);
 const clientId = urlParams.get("id");
